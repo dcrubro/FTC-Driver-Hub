@@ -11,6 +11,7 @@ final class FTCController: ObservableObject {
     @Published var opModes: [String] = []
     @Published var selectedOpMode: String? = nil
     @Published var robotState: RobotOpModeState = .unknown
+    @Published var latestTelemetry: [String: String] = [:]
 
     private var engine: ProtocolEngine?
 
@@ -31,12 +32,15 @@ final class FTCController: ObservableObject {
         // Telemetry updates
         engine.onTelemetry = { [weak self] telemetryPacket in
             guard let self else { return }
-
+            
             var voltage: Double = 0
             for entry in telemetryPacket.floatEntries {
                 if entry.key == "$Robot$Battery$Level$" {
                     voltage = Double(entry.value)
                 }
+            }
+            for entry in telemetryPacket.stringEntries {
+                latestTelemetry[entry.key] = entry.value // Print these to the telemetry view
             }
             self.telemetry = Telemetry(batteryVoltage: voltage)
         }
@@ -91,6 +95,28 @@ final class FTCController: ObservableObject {
     func stopOpMode() {
         sendCommand("CMD_INIT_OP_MODE", data: "$Stop$Robot$")
         logs.append("Stop OpMode")
+    }
+    
+    // MARK: - Update Gamepad
+    func updateGamepad(leftX: Double, leftY: Double, rightX: Double, rightY: Double, buttons: Set<String>) {
+        guard let engine else { return }
+
+        engine.updateGamepad { gp in
+            gp.leftStickX = Float(leftX)
+            gp.leftStickY = Float(leftY)
+            gp.rightStickX = Float(rightX)
+            gp.rightStickY = Float(rightY)
+
+            // Map button names to flags (simplified)
+            var flags: UInt32 = 0
+            if buttons.contains("triangle") { flags |= 1 << 5 }
+            if buttons.contains("square")   { flags |= 1 << 6 }
+            if buttons.contains("circle")   { flags |= 1 << 7 }
+            if buttons.contains("cross")    { flags |= 1 << 8 }
+
+            gp.buttonFlags = flags
+            gp.timestamp = UInt64(Date().timeIntervalSince1970 * 1_000)
+        }
     }
 
     // MARK: - Response handling

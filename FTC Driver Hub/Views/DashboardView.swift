@@ -1,8 +1,15 @@
+//
+//  DashboardView.swift
+//  FTC Driver Hub
+//
+//  Created by dcrubro on 11. 10. 25.
+//
+
 import SwiftUI
 
 struct DashboardView: View {
-    @StateObject private var controller = FTCController()
-
+    @EnvironmentObject var controller: FTCController
+    
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {

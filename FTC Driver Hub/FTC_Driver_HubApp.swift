@@ -9,13 +9,12 @@ import SwiftUI
 
 @main
 struct FTC_Driver_HubApp: App {
-    @StateObject private var engine = ProtocolEngine(
-        config: .init(host: "192.168.43.1")
-    )
+    @StateObject private var controller = FTCController()
     
     var body: some Scene {
         WindowGroup {
-            RootView().environmentObject(engine)
+            RootView()
+                .environmentObject(controller)
         }
     }
 }
