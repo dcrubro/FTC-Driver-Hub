@@ -34,7 +34,25 @@
 		BCAFBF932E9A7ECE00E402E1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BC6301012E9B04C600116D69 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				FTCDriverHubIcon.png,
+			);
+			target = BC89CB002E99C82E00637139 /* FTC Driver Hub */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		BC6300FF2E9B04AD00116D69 /* Assets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BC6301012E9B04C600116D69 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
 		BC89CB032E99C82E00637139 /* FTC Driver Hub */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "FTC Driver Hub";
@@ -80,6 +98,7 @@
 		BC89CAF82E99C82D00637139 = {
 			isa = PBXGroup;
 			children = (
+				BC6300FF2E9B04AD00116D69 /* Assets */,
 				BCAFBF932E9A7ECE00E402E1 /* README.md */,
 				BC89CB032E99C82E00637139 /* FTC Driver Hub */,
 				BC89CB112E99C82E00637139 /* FTC Driver HubTests */,
@@ -114,6 +133,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				BC6300FF2E9B04AD00116D69 /* Assets */,
 				BC89CB032E99C82E00637139 /* FTC Driver Hub */,
 			);
 			name = "FTC Driver Hub";
