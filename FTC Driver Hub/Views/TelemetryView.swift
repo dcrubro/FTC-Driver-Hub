@@ -13,7 +13,7 @@ struct TelemetryView: View {
     @State private var timer: AnyCancellable?
     
     private let refreshInterval: TimeInterval = 0.25
-
+    
     var body: some View {
         GeometryReader { geo in
             ScrollView {
@@ -22,7 +22,7 @@ struct TelemetryView: View {
                         .font(.title2)
                         .bold()
                         .padding(.bottom, 10)
-
+                    
                     if controller.isConnected {
                         if controller.latestTelemetry.isEmpty {
                             Text("No telemetry received yet.")
@@ -68,7 +68,7 @@ struct TelemetryView: View {
         .onAppear { startRefreshLoop() }
         .onDisappear { timer?.cancel() }
     }
-
+    
     // MARK: - Refresh
     private func startRefreshLoop() {
         timer?.cancel()
@@ -76,7 +76,7 @@ struct TelemetryView: View {
             .autoconnect()
             .sink { _ in refreshTelemetry() }
     }
-
+    
     private func refreshTelemetry() {
         guard controller.isConnected else { return }
         controller.objectWillChange.send()
