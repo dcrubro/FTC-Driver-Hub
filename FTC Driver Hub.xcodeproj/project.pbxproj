@@ -35,7 +35,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BC6301012E9B04C600116D69 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */ = {
+		BCDB3AA32E9D42DD001DF7E9 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				FTCDriverHubIcon.png,
@@ -48,7 +48,7 @@
 		BC6300FF2E9B04AD00116D69 /* Assets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				BC6301012E9B04C600116D69 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */,
+				BCDB3AA32E9D42DD001DF7E9 /* Exceptions for "Assets" folder in "FTC Driver Hub" target */,
 			);
 			path = Assets;
 			sourceTree = "<group>";
