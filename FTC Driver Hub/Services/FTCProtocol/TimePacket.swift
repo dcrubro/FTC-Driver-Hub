@@ -7,71 +7,43 @@
 
 import Foundation
 
-struct TimePacket: Packet {
-    static let id: PacketType = .time
-    
+struct TimePacket {
     var timestamp: UInt64
-    var robotOpModeState: RobotOpModeState
+    var robotState: RobotOpModeState
     var unixMillisSent: UInt64
     var unixMillisReceived1: UInt64
     var unixMillisReceived2: UInt64
     var timezone: String
-    
-    // Explicit memberwise initializer
-    init(timestamp: UInt64, robotOpModeState: RobotOpModeState,
-        unixMillisSent: UInt64, unixMillisReceived1: UInt64,
-        unixMillisReceived2: UInt64, timezone: String) {
-        self.timestamp = timestamp
-        self.robotOpModeState = robotOpModeState
-        self.unixMillisSent = unixMillisSent
-        self.unixMillisReceived1 = unixMillisReceived1
-        self.unixMillisReceived2 = unixMillisReceived2
-        self.timezone = timezone
-    }
-    
-    // MARK: Encode
+
     func encode() -> Data {
-        var data = Data([Self.id.rawValue])
-        var timestampLE = timestamp.littleEndian
-        var opMode = robotOpModeState.rawValue
-        var sentLE = unixMillisSent.littleEndian
-        var recv1LE = unixMillisReceived1.littleEndian
-        var recv2LE = unixMillisReceived2.littleEndian
-        var tzData = timezone.data(using: .utf8) ?? Data()
-        var tzLength = UInt8(tzData.count)
-        
-        withUnsafeBytes(of: &timestampLE) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &opMode) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &sentLE) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &recv1LE) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &recv2LE) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &tzLength) { data.append(contentsOf: $0) }
-        data.append(tzData)
-
-        return data
+        var d = Data()
+        d.appendBE(timestamp)
+        d.append(UInt8(bitPattern: robotState.rawValue))
+        d.appendBE(unixMillisSent)
+        d.appendBE(unixMillisReceived1)
+        d.appendBE(unixMillisReceived2)
+        d.append(UInt8(timezone.utf8.count))
+        d.appendString(timezone)
+        return d
     }
-    
-    // MARK: Decode
-    init?(data: Data) {
-        var cursor = 1 // skip packet ID
-        guard data.count > cursor + 8 else { return nil }
 
-        func read<T>(_ type: T.Type) -> T {
-            let size = MemoryLayout<T>.size
-            defer { cursor += size }
-            return data[cursor..<cursor + size].withUnsafeBytes {
-                $0.load(as: T.self)
-            }
-        }
+    static func read(from data: inout Data) -> TimePacket? {
+        guard let ts = data.readUInt64(),
+              let stateRaw = data.readInt8(),
+              let s1 = data.readUInt64(),
+              let s2 = data.readUInt64(),
+              let s3 = data.readUInt64(),
+              let tzLen = data.readUInt8(),
+              let tz = data.readString(length: Int(tzLen))
+        else { return nil }
 
-        timestamp = UInt64(littleEndian: read(UInt64.self))
-        robotOpModeState = RobotOpModeState(rawValue: read(Int8.self)) ?? .unknown
-        unixMillisSent = UInt64(littleEndian: read(UInt64.self))
-        unixMillisReceived1 = UInt64(littleEndian: read(UInt64.self))
-        unixMillisReceived2 = UInt64(littleEndian: read(UInt64.self))
-        let tzLength = Int(read(UInt8.self))
-        guard cursor + tzLength <= data.count else { return nil }
-        let tzBytes = data[cursor..<cursor + tzLength]
-        timezone = String(data: tzBytes, encoding: .utf8) ?? "Unknown"
+        return TimePacket(
+            timestamp: ts,
+            robotState: RobotOpModeState(rawValue: stateRaw) ?? .unknown,
+            unixMillisSent: s1,
+            unixMillisReceived1: s2,
+            unixMillisReceived2: s3,
+            timezone: tz
+        )
     }
 }

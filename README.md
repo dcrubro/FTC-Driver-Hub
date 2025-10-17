@@ -1,4 +1,6 @@
-#  FTC Driver Hub
+![FTC Driver Hub](./Assets/FTCDriverHubFULL.png)
+
+## What is it?
 
 This project is an attempt to port the REV Driver Hub to iOS.
 
@@ -12,3 +14,6 @@ The XCode project is targeting iOS 17.6, although it should be able to run on ol
 Hopefully one day when I actually purchase a developer license for Apple, I can get this on the App Store. In the meantime, you can sideload it.
 
 The base code was taked from FTC Tui, since it's open source and then adapted for Swift.
+
+## Legal Stuff
+This project is not affiliated with REV Robotics or FIRST. It is simply a community-made project to bring the REV Driver Hub to iOS.

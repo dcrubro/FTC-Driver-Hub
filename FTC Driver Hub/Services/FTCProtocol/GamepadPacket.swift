@@ -7,84 +7,55 @@
 
 import Foundation
 
-struct GamepadPacket: Packet {
-    static let id: PacketType = .gamepad
-
+struct GamepadPacket {
     var gamepadID: Int32
     var timestamp: UInt64
-    var leftStickX: Float
-    var leftStickY: Float
-    var rightStickX: Float
-    var rightStickY: Float
-    var leftTrigger: Float
-    var rightTrigger: Float
+    var leftStickX, leftStickY, rightStickX, rightStickY: Float
+    var leftTrigger, rightTrigger: Float
     var buttonFlags: UInt32
-    var user: UInt8
-    var legacyType: UInt8
-    var gamepadType: UInt8
-    var touchpadFinger1X: Float
-    var touchpadFinger1Y: Float
-    var touchpadFinger2X: Float
-    var touchpadFinger2Y: Float
+    var user, legacyType, gamepadType: UInt8
+    var touch1X, touch1Y, touch2X, touch2Y: Float
 
-    init(gamepadID: Int32, timestamp: UInt64,
-        leftStickX: Float, leftStickY: Float,
-        rightStickX: Float, rightStickY: Float,
-        leftTrigger: Float, rightTrigger: Float,
-        buttonFlags: UInt32, user: UInt8,
-        legacyType: UInt8, gamepadType: UInt8,
-        touchpadFinger1X: Float, touchpadFinger1Y: Float,
-        touchpadFinger2X: Float, touchpadFinger2Y: Float) {
-        self.gamepadID = gamepadID
-        self.timestamp = timestamp
-        self.leftStickX = leftStickX
-        self.leftStickY = leftStickY
-        self.rightStickX = rightStickX
-        self.rightStickY = rightStickY
-        self.leftTrigger = leftTrigger
-        self.rightTrigger = rightTrigger
-        self.buttonFlags = buttonFlags
-        self.user = user
-        self.legacyType = legacyType
-        self.gamepadType = gamepadType
-        self.touchpadFinger1X = touchpadFinger1X
-        self.touchpadFinger1Y = touchpadFinger1Y
-        self.touchpadFinger2X = touchpadFinger2X
-        self.touchpadFinger2Y = touchpadFinger2Y
-    }
-    
-    // MARK: - Encode
     func encode() -> Data {
-        var data = Data([Self.id.rawValue])
-        var marker: UInt8 = 5
-        withUnsafeBytes(of: &marker) { data.append(contentsOf: $0) }
-
-        var gid = gamepadID.littleEndian
-        var ts = timestamp.littleEndian
-        [gid, ts].forEach { withUnsafeBytes(of: $0) { data.append(contentsOf: $0) } }
-
-        for f in [leftStickX, leftStickY, rightStickX, rightStickY,
-                  leftTrigger, rightTrigger,
-                  touchpadFinger1X, touchpadFinger1Y,
-                  touchpadFinger2X, touchpadFinger2Y] {
-            var bits = f.bitPattern.littleEndian
-            withUnsafeBytes(of: &bits) { data.append(contentsOf: $0) }
-        }
-
-        var flags = buttonFlags.littleEndian
-        withUnsafeBytes(of: &flags) { data.append(contentsOf: $0) }
-
-        [user, legacyType, gamepadType].forEach { v in
-            var val = v
-            withUnsafeBytes(of: &val) { data.append(contentsOf: $0) }
-        }
-
-        return data
+        var d = Data()
+        d.append(UInt8(5))
+        d.appendBE(gamepadID)
+        d.appendBE(timestamp)
+        [leftStickX, leftStickY, rightStickX, rightStickY,
+         leftTrigger, rightTrigger].forEach { d.appendBE($0.bitPattern) }
+        d.appendBE(buttonFlags)
+        d.append(user)
+        d.append(legacyType)
+        d.append(gamepadType)
+        [touch1X, touch1Y, touch2X, touch2Y].forEach { d.appendBE($0.bitPattern) }
+        return d
     }
-    
-    // MARK: - Decode
-    // Not really needed here
-    init?(data: Data) {
-        return nil
+
+    static func read(from data: inout Data) -> GamepadPacket? {
+        guard data.count >= 57 else { return nil }
+        _ = data.readUInt8() // static 5
+        guard let id = data.readInt32(),
+              let ts = data.readUInt64()
+        else { return nil }
+
+        func readF() -> Float? { data.readFloat32() }
+
+        guard let lx = readF(), let ly = readF(),
+              let rx = readF(), let ry = readF(),
+              let lt = readF(), let rt = readF(),
+              let flags = data.readUInt32(),
+              let user = data.readUInt8(),
+              let legacy = data.readUInt8(),
+              let type = data.readUInt8(),
+              let t1x = readF(), let t1y = readF(), let t2x = readF(), let t2y = readF()
+        else { return nil }
+
+        return GamepadPacket(gamepadID: id, timestamp: ts,
+                             leftStickX: lx, leftStickY: ly,
+                             rightStickX: rx, rightStickY: ry,
+                             leftTrigger: lt, rightTrigger: rt,
+                             buttonFlags: flags,
+                             user: user, legacyType: legacy, gamepadType: type,
+                             touch1X: t1x, touch1Y: t1y, touch2X: t2x, touch2Y: t2y)
     }
 }

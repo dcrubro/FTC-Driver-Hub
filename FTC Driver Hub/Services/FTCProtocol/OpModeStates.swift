@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum RobotOpModeState: Int8 {
+enum RobotOpModeState: Int8, Codable {
     case unknown = -1
     case notStarted = 0
     case initialized = 1

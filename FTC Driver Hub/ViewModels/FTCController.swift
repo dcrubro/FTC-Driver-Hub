@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 final class FTCController: ObservableObject {
-    @Published var telemetry = Telemetry(batteryVoltage: 0)
+    @Published var telemetry = Telemetry(batteryVoltage: 0, status: "Null")
     @Published var logs: [String] = []
     @Published var settings = Settings(ipAddress: "192.168.43.1", port: "20884")
     @Published var isConnected = false
@@ -21,42 +21,60 @@ final class FTCController: ObservableObject {
 
         let cfg = ProtocolEngine.Config(
             host: settings.ipAddress,
-            port: UInt16(settings.port) ?? 20884,
-            tickHz: 25.0,
-            sendHeartbeat: true,
-            sendGamepad: true
+            port: UInt16(settings.port) ?? 20884
         )
 
+        //let engine = ProtocolEngine(config: cfg)
         let engine = ProtocolEngine(config: cfg)
-
-        // Telemetry updates
-        engine.onTelemetry = { [weak self] telemetryPacket in
+        
+        // MARK: - Telemetry updates
+        engine.onTelemetry = { [weak self] packet in
             guard let self else { return }
-            
-            var voltage: Double = 0
-            for entry in telemetryPacket.floatEntries {
-                if entry.key == "$Robot$Battery$Level$" {
-                    voltage = Double(entry.value)
+
+            for entry in packet.stringEntries {
+                if entry.key == "$Robot$Battery$Level$",
+                   let voltage = Double(entry.value) {
+                    DispatchQueue.main.async {
+                        self.telemetry.batteryVoltage = voltage
+                    }
+                    self.logs.append("Robot Battery: \(voltage)V")
+                    print("Robot Battery: \(voltage)V")
+                }
+
+                if entry.key == "Status" {
+                    DispatchQueue.main.async {
+                        self.telemetry.status = entry.value
+                    }
                 }
             }
-            for entry in telemetryPacket.stringEntries {
-                latestTelemetry[entry.key] = entry.value // Print these to the telemetry view
-            }
-            self.telemetry = Telemetry(batteryVoltage: voltage)
         }
 
-        // Command handling
-        engine.onCommand = { [weak self] cmd in
+        // MARK: - Command handling
+        engine.onCommand = { [weak self] (cmd: CommandPacket) in
             guard let self else { return }
 
             switch cmd.command {
             case "CMD_NOTIFY_OP_MODE_LIST":
-                self.handleOpModeList(data: cmd.data)
+                self.logs.append("Received OpMode list.")
             case "CMD_NOTIFY_ROBOT_STATE":
-                self.handleRobotState(data: cmd.data)
+                self.logs.append("Robot state update: \(cmd.data)")
             default:
                 self.logs.append("Command received: \(cmd.command)")
             }
+        }
+
+        // MARK: - Heartbeat handling
+        engine.onHeartbeat = { [weak self] (hb: HeartbeatPacket) in
+            guard let self else { return }
+
+            DispatchQueue.main.async {
+                self.isConnected = true
+            }
+
+            self.logs.append(
+                "Heartbeat from Control Hub – SDK \(hb.sdkMajorVersion).\(hb.sdkMinorVersion), " +
+                "Build \(hb.sdkBuildMonth)/\(hb.sdkBuildYear)"
+            )
         }
 
         engine.start()
@@ -143,6 +161,7 @@ final class FTCController: ObservableObject {
 // MARK: - Supporting Models
 struct Telemetry {
     var batteryVoltage: Double
+    var status: String
 }
 
 struct Settings {

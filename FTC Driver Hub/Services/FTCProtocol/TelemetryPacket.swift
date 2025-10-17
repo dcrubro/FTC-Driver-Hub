@@ -7,71 +7,78 @@
 
 import Foundation
 
-struct TelemetryPacket: Packet {
-    static let id: PacketType = .telemetry
-
-    var unixTimestampMillis: Int64
-    var isSorted: Bool
-    var robotState: RobotOpModeState
-    var tag: String
+struct TelemetryPacket {
+    let unixMillis: UInt64
+    let isSorted: Bool
+    let robotState: Int8
+    let tag: String?
     var stringEntries: [TelemetryEntry]
     var floatEntries: [FloatEntry]
-    
-    init(unixTimestampMillis: Int64, isSorted: Bool,
-        robotState: RobotOpModeState, tag: String,
-        stringEntries: [TelemetryEntry], floatEntries: [FloatEntry]) {
-        self.unixTimestampMillis = unixTimestampMillis
-        self.isSorted = isSorted
-        self.robotState = robotState
-        self.tag = tag
-        self.stringEntries = stringEntries
-        self.floatEntries = floatEntries
+
+    init?(from data: Data) {
+        var d = data
+
+        // 8 bytes: unixMillis
+        guard let unixMillis = d.readUInt64() else { return nil }
+        self.unixMillis = unixMillis
+
+        // 1 byte: isSorted
+        guard let sortedFlag = d.readUInt8() else { return nil }
+        self.isSorted = sortedFlag != 0
+
+        // 1 byte: robotState
+        guard let state = d.readInt8() else { return nil }
+        self.robotState = state
+
+        // 1 byte: tag length
+        guard let tagLen = d.readUInt8() else { return nil }
+
+        // variable: tag (if > 0)
+        if tagLen > 0 {
+            self.tag = d.readString(length: Int(tagLen))
+        } else {
+            self.tag = nil
+        }
+
+        // Now parse string entries
+        self.stringEntries = TelemetryPacket.parseStringEntries(from: &d)
+
+        // Then float entries (usually 0)
+        self.floatEntries = TelemetryPacket.parseFloatEntries(from: &d)
     }
 
-    // MARK: - Decode (inbound only)
-    init?(data rawData: Data) {
-        var cursor = 1 // skip packet ID
-        func read<T>(_ type: T.Type) -> T {
-            let size = MemoryLayout<T>.size
-            defer { cursor += size }
-            return rawData[cursor..<cursor + size].withUnsafeBytes { $0.load(as: T.self) }
+    // MARK: - Parsing helpers
+
+    private static func parseStringEntries(from data: inout Data) -> [TelemetryEntry] {
+        guard let entryCount = data.readUInt8() else { return [] }
+        var entries: [TelemetryEntry] = []
+
+        for _ in 0..<entryCount {
+            guard let keyLen = data.readUInt16(),
+                  let key = data.readString(length: Int(keyLen)),
+                  let valLen = data.readUInt16(),
+                  let value = data.readString(length: Int(valLen)) else {
+                break
+            }
+            entries.append(TelemetryEntry(key: key, value: value))
         }
 
-        func readString(length: Int) -> String {
-            let range = cursor..<cursor + length
-            let strData = rawData.subdata(in: range)
-            cursor += length
-            return String(data: strData, encoding: .utf8) ?? ""
-        }
-
-        guard rawData.count >= 10 else { return nil }
-
-        unixTimestampMillis = Int64(littleEndian: read(Int64.self))
-        isSorted = read(UInt8.self) != 0
-        robotState = RobotOpModeState(rawValue: read(Int8.self)) ?? .unknown
-
-        let tagLen = Int(read(UInt8.self))
-        tag = tagLen > 0 ? readString(length: tagLen) : ""
-
-        let numStringEntries = Int(read(UInt8.self))
-        var stringEntriesTemp: [TelemetryEntry] = []
-
-        for _ in 0..<numStringEntries {
-            guard let entry = TelemetryEntry.read(from: &cursor, data: rawData) else { return nil }
-            stringEntriesTemp.append(entry)
-        }
-
-        let numFloatEntries = Int(read(UInt8.self))
-        var floatEntriesTemp: [FloatEntry] = []
-
-        for _ in 0..<numFloatEntries {
-            guard let entry = FloatEntry.read(from: &cursor, data: rawData) else { return nil }
-            floatEntriesTemp.append(entry)
-        }
-
-        stringEntries = stringEntriesTemp
-        floatEntries = floatEntriesTemp
+        return entries
     }
 
-    func encode() -> Data { Data() } // Telemetry is inbound-only
+    private static func parseFloatEntries(from data: inout Data) -> [FloatEntry] {
+        guard let entryCount = data.readUInt8() else { return [] }
+        var floats: [FloatEntry] = []
+
+        for _ in 0..<entryCount {
+            guard let keyLen = data.readUInt16(),
+                  let key = data.readString(length: Int(keyLen)),
+                  let value = data.readFloat32() else {
+                break
+            }
+            floats.append(FloatEntry(key: key, value: value))
+        }
+
+        return floats
+    }
 }
