@@ -45,6 +45,8 @@ final class FTCController: ObservableObject {
                     DispatchQueue.main.async {
                         self.telemetry.status = entry.value
                     }
+                    
+                    print("Robot Status: \(entry.value)")
                 }
             }
         }

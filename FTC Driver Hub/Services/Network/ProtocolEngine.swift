@@ -53,7 +53,12 @@ final class ProtocolEngine: ObservableObject {
         udp.start(host: config.host, port: config.port)
 
         sendTimeInit()
-        schedulePackets()
+        print("Sent the Time Packet")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.schedulePackets()
+            print("Started scheduled Heartbeats + Gamepad packets")
+        }
     }
 
     func stop() {
@@ -73,14 +78,15 @@ final class ProtocolEngine: ObservableObject {
             timers.append(t)
         }
 
-        if config.sendGamepad {
-            timer(every: 1.0 / config.tickHz) { [weak self] in
-                Task { @MainActor in self?.sendGamepad() }
-            }
-        }
         if config.sendHeartbeat {
             timer(every: 1.0 / config.heartbeatHz) { [weak self] in
                 Task { @MainActor in self?.sendHeartbeat() }
+            }
+        }
+        
+        if config.sendGamepad {
+            timer(every: 1.0 / config.tickHz) { [weak self] in
+                Task { @MainActor in self?.sendGamepad() }
             }
         }
     }
@@ -119,6 +125,8 @@ final class ProtocolEngine: ObservableObject {
     }
 
     func sendCommand(name: String, data: String = "", acknowledged: Bool = false) {
+        return //Temporary
+        
         let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000.0)
         let cmd = CommandPacket(
             timestamp: nanos,
