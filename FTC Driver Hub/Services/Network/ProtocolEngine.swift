@@ -8,19 +8,30 @@
 import Foundation
 import Combine
 
+enum HandshakeState: String {
+    case idle
+    case requesting
+    case awaitingResponse
+    case complete
+}
+
 @MainActor
 final class ProtocolEngine: ObservableObject {
     struct Config {
         var host: String
         var port: UInt16 = 20884
         var tickHz: Double = 25.0
-        var heartbeatHz: Double = 10.0
+        var heartbeatHz: Double = 1.0
         var sendHeartbeat: Bool = true
         var sendGamepad: Bool = true
     }
 
     // MARK: - Public Surface
     @Published private(set) var isRunning = false
+    @Published private(set) var awaitingRobotState = true
+    @Published private(set) var handshakeState: HandshakeState = .idle
+    private var handshakeTimer: DispatchSourceTimer?
+    private var hasReceivedRobotState = false
     var onTelemetry: ((TelemetryPacket) -> Void)?
     var onCommand: ((CommandPacket) -> Void)?
     var onHeartbeat: ((HeartbeatPacket) -> Void)?
@@ -28,6 +39,8 @@ final class ProtocolEngine: ObservableObject {
     private var udp = UDPClient()
     private var timers: [DispatchSourceTimer] = []
     private var config: Config
+    private var sequenceNumber: Int16 = Int16.random(in: 1000...3000)
+    private var hasPerformedHandshake = false
 
     var latestGamepad: GamepadPacket?
     var currentOpModeState: RobotOpModeState = .unknown
@@ -39,6 +52,11 @@ final class ProtocolEngine: ObservableObject {
     init(config: Config) {
         self.config = config
     }
+    
+    private func nextSequenceNumber() -> Int16 {
+        sequenceNumber &+= 1
+        return sequenceNumber
+    }
 
     // MARK: - Lifecycle
     func start() {
@@ -46,19 +64,15 @@ final class ProtocolEngine: ObservableObject {
         isRunning = true
 
         udp.onReceive = { [weak self] data, _ in
-            Task { @MainActor in
-                self?.handleInbound(data)
-            }
+            Task { @MainActor in self?.handleInbound(data) }
         }
-        udp.start(host: config.host, port: config.port)
 
+        udp.start(host: config.host, port: config.port)
+        print("UDP socket ready on \(config.host):\(config.port)")
+
+        //beginHandshake()
         sendTimeInit()
-        print("Sent the Time Packet")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.schedulePackets()
-            print("Started scheduled Heartbeats + Gamepad packets")
-        }
+        schedulePackets()
     }
 
     func stop() {
@@ -101,15 +115,21 @@ final class ProtocolEngine: ObservableObject {
         let now = Date()
         let nanos = UInt64(now.timeIntervalSince1970 * 1_000_000_000.0)
         let millis = UInt64(now.timeIntervalSince1970 * 1_000.0)
-        let pkt = TimePacket(
+
+        let packet = TimePacket(
             timestamp: nanos,
-            robotState: currentOpModeState,
+            robotOpModeState: RobotOpModeState.notStarted, // requesting state
             unixMillisSent: millis,
             unixMillisReceived1: 0,
             unixMillisReceived2: 0,
             timezone: TimeZone.current.identifier
         )
-        udp.send(pkt.encode())
+        
+        let envelope = PacketEnvelope(
+            type: PacketType.time.rawValue, sequenceNumber: nextSequenceNumber(), payload: packet.encode()
+        )
+
+        udp.send(envelope.encode())
     }
 
     private func sendHeartbeat() {
@@ -121,31 +141,132 @@ final class ProtocolEngine: ObservableObject {
             sdkMajorVersion: sdkMajor,
             sdkMinorVersion: sdkMinor
         )
-        udp.send(hb.encode())
+        
+        let envelope = PacketEnvelope(
+            type: PacketType.heartbeat.rawValue, sequenceNumber: nil, payload: hb.encode()
+        )
+        
+        udp.send(envelope.encode())
+    }
+    
+    @MainActor
+    private func sendHandshakeWave() {
+        guard handshakeState == .requesting else { return }
+
+        //sendCommand(name: "CMD_REQUEST_OP_MODE_LIST")
+        sendCommand(name: "CMD_REQUEST_ACTIVE_CONFIG")
+        sendCommand(name: "CMD_INIT_OP_MODE", data: "$Stop$Robot$")
+        //DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+        sendTimeInit()
+        sendTimeInit()
+
+        print("[ProtocolEngine] → Handshake wave sent")
     }
 
+    func beginHandshake() {
+        guard handshakeState == .idle else { return }
+        handshakeState = .requesting
+        hasReceivedRobotState = false
+
+        print("[ProtocolEngine] Starting handshake with \(config.host):\(config.port)")
+
+        // Timer that fires every 250 ms until we get a robot state
+        let timer = DispatchSource.makeTimerSource(queue: .global())
+        timer.schedule(deadline: .now(), repeating: 0.25)
+        timer.setEventHandler { [weak self] in
+            Task { @MainActor in self?.sendHandshakeWave() }
+        }
+        timer.resume()
+        handshakeTimer = timer
+    }
+    
     func sendCommand(name: String, data: String = "", acknowledged: Bool = false) {
-        return //Temporary
-        
-        let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000.0)
+        let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
         let cmd = CommandPacket(
             timestamp: nanos,
             acknowledged: acknowledged,
             command: name,
             data: data
         )
-        udp.send(cmd.encode())
+
+        // Wrap payload into PacketEnvelope
+        let envelope = PacketEnvelope(
+            type: PacketType.command.rawValue, // Command packet
+            sequenceNumber: nextSequenceNumber(),
+            payload: cmd.encode()
+        )
+
+        udp.send(envelope.encode())
+    }
+    
+    private func sendAck(for cmd: CommandPacket, seq: Int16) {
+        let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+        let ack = CommandPacket(
+            timestamp: nanos,
+            acknowledged: true,
+            command: cmd.command,
+            data: ""
+        )
+
+        let envelope = PacketEnvelope(
+            type: PacketType.command.rawValue,
+            sequenceNumber: seq,
+            payload: ack.encode()
+        )
+        udp.send(envelope.encode())
+    }
+    
+    @MainActor
+    private func handleCommandPacket(_ cmd: CommandPacket, seq: Int16?) {
+        print("[ProtocolEngine] ← Incoming Command: \(cmd.command) data=\(cmd.data) ack=\(cmd.acknowledged)")
+        
+        // This may hang a little for large JSON datasets; we shouldn't be parsing higher layer data here anyways.
+        //let jsonData = tryParseJSON(cmd.data)
+        
+        onCommand?(cmd)
+        
+        // Always ACK any incoming command from the RC
+        guard !cmd.acknowledged else { return }
+        
+        sendAck(for: cmd, seq: seq ?? 0)
+        print("[ProtocolEngine] ← Acknowledged Command: seq=\(seq)")
+        
+        /*switch cmd.command {
+        case "CMD_NOTIFY_ROBOT_STATE":
+            hasReceivedRobotState = true
+            if handshakeState != .complete {
+                handshakeState = .complete
+                handshakeTimer?.cancel()
+                handshakeTimer = nil
+                print("[ProtocolEngine] ✅ Handshake complete, RC responded with robot state \(cmd.data)")
+                // Now start the regular timers
+                schedulePackets()
+            }
+
+        default:
+            break
+        }*/
     }
 
     // MARK: - Inbound handling
     private func handleInbound(_ raw: Data) {
-        guard let envelope = PacketRouter.decode(raw) else { return }
+        guard let routed = PacketRouter.decode(raw) else { return }
 
-        switch envelope {
-        case .telemetry(let t): onTelemetry?(t)
-        case .command(let c): onCommand?(c)
-        case .heartbeat(let hb): onHeartbeat?(hb)
-        default: break
+        switch routed.payload {
+        case let cmd as CommandPacket:
+            handleCommandPacket(cmd, seq: routed.sequenceNumber)
+
+        case let telemetry as TelemetryPacket:
+            onTelemetry?(telemetry)
+
+        case let hb as HeartbeatPacket:
+            print("[ProtocolEngine] ← Heartbeat packet: \(hb)")
+
+        case let time as TimePacket:
+            print("[ProtocolEngine] ← Time packet: \(time)")
+
+        default:
+            print("[ProtocolEngine] ⚠️ Unhandled packet type \(routed.type)")
         }
     }
 

@@ -25,4 +25,5 @@ enum CommandName {
     static let notifyInitOpMode           = "CMD_NOTIFY_INIT_OP_MODE"
     static let notifyRunOpMode            = "CMD_NOTIFY_RUN_OP_MODE"
     static let showStacktrace             = "CMD_SHOW_STACKTRACE"
+    static let showToast                  = "CMD_SHOW_TOAST"
 }

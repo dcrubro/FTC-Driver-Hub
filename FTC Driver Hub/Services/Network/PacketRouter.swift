@@ -23,24 +23,48 @@ enum DecodedPacket {
     case telemetry(TelemetryPacket)
 }
 
-struct PacketRouter {
-    static func decode(_ data: Data) -> DecodedPacket? {
-        guard let env = PacketEnvelope.decode(from: data),
-              let type = PacketType(rawValue: env.type)
-        else { return nil }
+struct RoutedPacket {
+    let type: UInt8
+    let sequenceNumber: Int16?
+    let payload: Any
+}
 
-        var payload = env.payload
-        switch type {
-        case .time:
-            return TimePacket.read(from: &payload).map { .time($0) }
-        case .gamepad:
-            return GamepadPacket.read(from: &payload).map { .gamepad($0) }
-        case .heartbeat:
-            return HeartbeatPacket.read(from: &payload).map { .heartbeat($0) }
-        case .command:
-            return CommandPacket.read(from: &payload).map { .command($0) }
-        case .telemetry:
-            return TelemetryPacket(from: payload).map { .telemetry($0) }
+struct PacketRouter {
+    static func decode(_ data: Data) -> RoutedPacket? {
+            guard let env = PacketEnvelope.decode(from: data) else { return nil }
+            var payload = env.payload
+
+            switch env.type {
+            case 0x01: // Time Packet
+                if let packet = TimePacket.read(from: &payload) {
+                    return RoutedPacket(type: env.type, sequenceNumber: env.sequenceNumber, payload: packet)
+                }
+
+            case 0x02: // Gamepad Packet
+                if let packet = GamepadPacket.read(from: &payload) {
+                    return RoutedPacket(type: env.type, sequenceNumber: env.sequenceNumber, payload: packet)
+                }
+
+            case 0x03: // Heartbeat Packet
+                if let packet = HeartbeatPacket.read(from: &payload) {
+                    return RoutedPacket(type: env.type, sequenceNumber: env.sequenceNumber, payload: packet)
+                }
+
+            case 0x04: // Command Packet
+                if let packet = CommandPacket.decode(from: &payload) {
+                    return RoutedPacket(type: env.type, sequenceNumber: env.sequenceNumber, payload: packet)
+                }
+
+            case 0x05: // Telemetry Packet
+                if let packet = TelemetryPacket(from: payload) {
+                    return RoutedPacket(type: env.type, sequenceNumber: env.sequenceNumber, payload: packet)
+                }
+
+            default:
+                print("[PacketRouter] ⚠️ Unknown packet type: \(env.type)")
+                return nil
+            }
+
+            return nil
         }
-    }
 }

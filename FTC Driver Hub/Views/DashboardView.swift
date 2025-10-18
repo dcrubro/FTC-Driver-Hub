@@ -63,13 +63,14 @@ struct DashboardView: View {
                                 .font(.headline)
                             Spacer()
                         }
-
-                        Picker("OpMode", selection: $controller.selectedOpMode) {
-                            ForEach(controller.opModes, id: \.self) { opmode in
-                                Text(opmode).tag(Optional(opmode))
+                        
+                        Picker("Select OpMode", selection: $controller.selectedOpMode) {
+                            ForEach(controller.opModes, id: \.name) { opmode in
+                                Text(opmode.systemOpModeDisplayName ?? opmode.name)
+                                    .tag(Optional(opmode.name))
                             }
                         }
-                        .pickerStyle(MenuPickerStyle())
+                        .pickerStyle(.menu)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.secondarySystemBackground))
@@ -119,6 +120,15 @@ struct DashboardView: View {
                 Spacer()
             }
             .navigationTitle("Driver Hub Dashboard")
+            .alert("Control Hub Error",
+                isPresented: $controller.showErrorAlert,
+                actions: {
+                    Button("Dismiss", role: .cancel) { }
+                },
+                message: {
+                    Text(controller.lastErrorMessage ?? "Unknown error from Control Hub.")
+                }
+            )
         }
     }
 }

@@ -1,6 +1,14 @@
 import SwiftUI
 import Combine
 
+/*struct OpModeData: Codable {
+    let flavor: String
+    let group: String
+    let name: String
+    let source: String?
+    let systemOpModeBaseDisplayName: String?
+}*/
+
 @MainActor
 final class FTCController: ObservableObject {
     @Published var telemetry = Telemetry(batteryVoltage: 0, status: "Null")
@@ -8,10 +16,12 @@ final class FTCController: ObservableObject {
     @Published var settings = Settings(ipAddress: "192.168.43.1", port: "20884")
     @Published var isConnected = false
 
-    @Published var opModes: [String] = []
+    @Published var opModes: [OpModeData] = []
     @Published var selectedOpMode: String? = nil
     @Published var robotState: RobotOpModeState = .unknown
     @Published var latestTelemetry: [String: String] = [:]
+    @Published var lastErrorMessage: String? = nil
+    @Published var showErrorAlert: Bool = false
 
     private var engine: ProtocolEngine?
 
@@ -58,8 +68,17 @@ final class FTCController: ObservableObject {
             switch cmd.command {
             case "CMD_NOTIFY_OP_MODE_LIST":
                 self.logs.append("Received OpMode list.")
+                handleOpModeList(data: cmd.data)
+                
             case "CMD_NOTIFY_ROBOT_STATE":
                 self.logs.append("Robot state update: \(cmd.data)")
+            case CommandName.showStacktrace:
+                if cmd.data.contains("Exception") {
+                    let lines = cmd.data.split(separator: "\n").prefix(5)
+                    self.lastErrorMessage = lines.joined(separator: "\n")
+                }
+                self.showErrorAlert = true
+                self.logs.append("Robot Errored!")
             default:
                 self.logs.append("Command received: \(cmd.command)")
             }
@@ -102,18 +121,18 @@ final class FTCController: ObservableObject {
 
     func initOpMode() {
         guard let opMode = selectedOpMode else { return }
-        sendCommand("CMD_INIT_OP_MODE", data: opMode)
+        sendCommand(CommandName.initOpMode, data: opMode)
         logs.append("Init OpMode: \(opMode)")
     }
 
     func startOpMode() {
         guard let opMode = selectedOpMode else { return }
-        sendCommand("CMD_RUN_OP_MODE", data: opMode)
+        sendCommand(CommandName.runOpMode, data: opMode)
         logs.append("Start OpMode: \(opMode)")
     }
 
     func stopOpMode() {
-        sendCommand("CMD_INIT_OP_MODE", data: "$Stop$Robot$")
+        sendCommand(CommandName.initOpMode, data: "$Stop$Robot$")
         logs.append("Stop OpMode")
     }
     
@@ -144,7 +163,7 @@ final class FTCController: ObservableObject {
         if let jsonData = data.data(using: .utf8) {
             do {
                 let decoded = try JSONDecoder().decode([OpModeData].self, from: jsonData)
-                self.opModes = decoded.map { $0.name }
+                opModes = decoded
                 self.logs.append("Received \(opModes.count) OpModes")
             } catch {
                 self.logs.append("Failed to decode OpMode list: \(error.localizedDescription)")
@@ -156,6 +175,18 @@ final class FTCController: ObservableObject {
         if let intValue = Int8(data) {
             self.robotState = RobotOpModeState(rawValue: intValue) ?? .unknown
             self.logs.append("Robot state: \(robotState)")
+        }
+    }
+    
+    // Helper - TODO: move to different file sometime soon
+    private func tryParseJSON(_ text: String) -> Any? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        do {
+            let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+            return json
+        } catch {
+            print("[ProtocolEngine] ← JSON parse failed: \(error.localizedDescription)")
+            return nil
         }
     }
 }
@@ -171,7 +202,7 @@ struct Settings {
     var port: String
 }
 
-struct OpModeData: Codable {
+struct OpModeData: Codable, Hashable {
     var flavor: String
     var group: String
     var name: String
