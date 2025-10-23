@@ -9,7 +9,7 @@ Currently the REV Driver Hub is only written for Android (Natively by REV) and f
 It only uses native Swift code and no outside code/libraries, except for those provided by Apple themselves.
 
 ## Project Status
-I'm currently working on making the initital connection work and being able to exchange packets reliably.
+Packets are being exchanged pretty reliably now, with inital connection, heartbeat, command and telemetry logic in place. Work is currently underway on making the gamepad packets work, and actually enable the app to control the robot (Control Hub).
 
 ## How to Build
 Due to security reasons, the source code is provided with minimal Xcode project files. This is to avoid leaking any potential private info and provisioning keys (since that would be really bad).
@@ -21,9 +21,9 @@ I'll update this at some point with actual build instructions.
 ## Misc. Info
 The Xcode project is targeting iOS 17.6, although it should be able to run on older versions of iOS.
 
-Hopefully one day when I actually purchase a developer license for Apple, I can get this on the App Store. In the meantime, you can sideload it.
+Hopefully one day when I actually purchase a developer license from Apple, I can get this on the App Store. In the meantime, you can sideload it.
 
-Huge thanks to the REVersing project by FIRST Slovenia for supplying the base description of the protocol (it probably saved me days of staring at Wireshark).
+Huge thanks to the REVersing project by [FIRST Slovenia](https://firstslo.si/) for supplying the base description of the protocol (it probably saved me days of staring at Wireshark).
 
 ## Legal Stuff
 This project is not affiliated with REV Robotics or FIRST. It is simply a community-made project to bring the REV Driver Hub to iOS.

@@ -142,7 +142,12 @@ final class FTCController: ObservableObject {
         logs.append("Connected to \(settings.ipAddress):\(settings.port)")
 
         // Request opmode list once connected
-        sendCommand("CMD_REQUEST_OP_MODE_LIST")
+        Task {
+            print("Waiting for ProtocolEngine init...")
+            await waitUntilTrue() { engine.isReady }
+            sendCommand("CMD_REQUEST_OP_MODE_LIST")
+            print("ProtocolEngine initialized. Sent OpModeList request.")
+        }
     }
 
     func disconnect() {
@@ -150,6 +155,14 @@ final class FTCController: ObservableObject {
         engine = nil
         isConnected = false
         logs.append("Disconnected")
+    }
+    
+    // Helper
+    func waitUntilTrue(_ condition: @escaping () -> Bool) async {
+        while !condition() {
+            // Sleep asynchronously for 100ms — doesn't block the thread
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
     }
 
     // MARK: - Command sending helpers

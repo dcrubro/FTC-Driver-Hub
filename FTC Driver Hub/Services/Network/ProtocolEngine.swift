@@ -30,6 +30,7 @@ final class ProtocolEngine: ObservableObject {
     @Published private(set) var isRunning = false
     @Published private(set) var awaitingRobotState = true
     @Published private(set) var handshakeState: HandshakeState = .idle
+    @Published private(set) var isReady = false
     private var handshakeTimer: DispatchSourceTimer?
     private var hasReceivedRobotState = false
     var onTelemetry: ((TelemetryPacket) -> Void)?
@@ -120,8 +121,9 @@ final class ProtocolEngine: ObservableObject {
 
     private func sendTimeInit() {
         let now = Date()
-        let nanos = UInt64(now.timeIntervalSince1970 * 1_000_000_000.0)
-        let millis = UInt64(now.timeIntervalSince1970 * 1_000.0)
+        let time = now.timeIntervalSince1970
+        let nanos = UInt64(time * 1_000_000_000.0)
+        let millis = UInt64(time * 1_000.0)
 
         let packet = TimePacket(
             timestamp: nanos,
@@ -154,6 +156,8 @@ final class ProtocolEngine: ObservableObject {
         )
         
         udp.send(envelope.encode())
+        
+        if !isReady { isReady = true }
     }
     
     @MainActor
