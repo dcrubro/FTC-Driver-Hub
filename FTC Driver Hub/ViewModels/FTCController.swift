@@ -1,3 +1,10 @@
+//
+//  FTCController.swift
+//  FTC Driver Hub
+//
+//  Created by dcrubro on 11. 10. 25.
+//
+
 import SwiftUI
 import Combine
 
@@ -40,6 +47,8 @@ final class FTCController: ObservableObject {
         // MARK: - Telemetry updates
         engine.onTelemetry = { [weak self] packet in
             guard let self else { return }
+            
+            self.logs.append("Got Raw Telemetry!")
 
             for entry in packet.stringEntries {
                 if entry.key == "$Robot$Battery$Level$",
@@ -49,14 +58,36 @@ final class FTCController: ObservableObject {
                     }
                     self.logs.append("Robot Battery: \(voltage)V")
                     print("Robot Battery: \(voltage)V")
-                }
-
-                if entry.key == "Status" {
+                } else if entry.key == "Status" {
                     DispatchQueue.main.async {
                         self.telemetry.status = entry.value
                     }
                     
                     print("Robot Status: \(entry.value)")
+                } else {
+                    // General user-level telemetry, append to latest
+                    print("\(entry.key): \(entry.value)")
+                    var key: String = ""
+                    var value: String = ""
+                    
+                    if entry.value.contains(":") {
+                        let full: [String] = entry.value.components(separatedBy: ":")
+                        key = full[0]
+                        value = full[1]
+                    } else {
+                        key = entry.key
+                        value = entry.value
+                    }
+                    
+                    // Quick stupidity check
+                    if key != "Status" {
+                        // We're actually running lmao
+                        self.latestTelemetry["Status "] = robotState == .running ? "Robot is running" : "Robot is initialized"
+                    }
+                    
+                    DispatchQueue.main.async {
+                        self.latestTelemetry[key] = value
+                    }
                 }
             }
         }
@@ -66,12 +97,19 @@ final class FTCController: ObservableObject {
             guard let self else { return }
 
             switch cmd.command {
-            case "CMD_NOTIFY_OP_MODE_LIST":
+            case CommandName.notifyOpModes:
                 self.logs.append("Received OpMode list.")
                 handleOpModeList(data: cmd.data)
-                
-            case "CMD_NOTIFY_ROBOT_STATE":
+            case CommandName.notifyOpModeState:
                 self.logs.append("Robot state update: \(cmd.data)")
+            case CommandName.notifyInitOpMode:
+                robotState = .initialized
+            case CommandName.notifyRunOpMode:
+                if cmd.data == "$Stop$Robot$" {
+                    robotState = .stopped
+                } else {
+                    robotState = .running
+                }
             case CommandName.showStacktrace:
                 if cmd.data.contains("Exception") {
                     let lines = cmd.data.split(separator: "\n").prefix(5)
@@ -137,7 +175,11 @@ final class FTCController: ObservableObject {
     }
     
     // MARK: - Update Gamepad
-    func updateGamepad(leftX: Double, leftY: Double, rightX: Double, rightY: Double, buttons: Set<String>) {
+    func updateGamepad(leftX: Double, leftY: Double,
+                       rightX: Double, rightY: Double,
+                       leftTrigger: Double = 0,
+                       rightTrigger: Double = 0,
+                       buttons: Set<String> = []) {
         guard let engine else { return }
 
         engine.updateGamepad { gp in
@@ -145,13 +187,23 @@ final class FTCController: ObservableObject {
             gp.leftStickY = Float(leftY)
             gp.rightStickX = Float(rightX)
             gp.rightStickY = Float(rightY)
+            gp.leftTrigger = Float(leftTrigger)
+            gp.rightTrigger = Float(rightTrigger)
 
-            // Map button names to flags (simplified)
+            // Map button names → bit flags
             var flags: UInt32 = 0
             if buttons.contains("triangle") { flags |= 1 << 5 }
             if buttons.contains("square")   { flags |= 1 << 6 }
             if buttons.contains("circle")   { flags |= 1 << 7 }
             if buttons.contains("cross")    { flags |= 1 << 8 }
+            if buttons.contains("l1")       { flags |= 1 << 9 }
+            if buttons.contains("r1")       { flags |= 1 << 10 }
+            if buttons.contains("l2")       { flags |= 1 << 11 }
+            if buttons.contains("r2")       { flags |= 1 << 12 }
+            if buttons.contains("dpad_up")  { flags |= 1 << 13 }
+            if buttons.contains("dpad_down"){ flags |= 1 << 14 }
+            if buttons.contains("dpad_left"){ flags |= 1 << 15 }
+            if buttons.contains("dpad_right"){ flags |= 1 << 16 }
 
             gp.buttonFlags = flags
             gp.timestamp = UInt64(Date().timeIntervalSince1970 * 1_000)

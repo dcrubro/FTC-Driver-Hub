@@ -7,8 +7,6 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct GamepadView: View {
     @EnvironmentObject var controller: FTCController
 
@@ -17,6 +15,7 @@ struct GamepadView: View {
     @State private var pressedButtons: Set<String> = []
     @State private var leftTrigger: Float = 0
     @State private var rightTrigger: Float = 0
+    @State private var lastSend = Date()
 
     private let maxOffset: CGFloat = 40
 
@@ -127,11 +126,16 @@ extension GamepadView {
 
     // MARK: - Gamepad bridge and helpers
     private func sendGamepad() {
+        guard Date().timeIntervalSince(lastSend) > 0.04 else { return } // 25Hz
+        lastSend = Date()
+
         controller.updateGamepad(
             leftX: leftStick.x / maxOffset,
             leftY: -leftStick.y / maxOffset,
             rightX: rightStick.x / maxOffset,
             rightY: -rightStick.y / maxOffset,
+            leftTrigger: Double(leftTrigger),
+            rightTrigger: Double(rightTrigger),
             buttons: pressedButtons
         )
     }

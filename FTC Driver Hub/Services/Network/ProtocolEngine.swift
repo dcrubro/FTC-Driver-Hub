@@ -99,6 +99,7 @@ final class ProtocolEngine: ObservableObject {
         }
         
         if config.sendGamepad {
+            //print("yahr")
             timer(every: 1.0 / config.tickHz) { [weak self] in
                 Task { @MainActor in self?.sendGamepad() }
             }
@@ -108,7 +109,13 @@ final class ProtocolEngine: ObservableObject {
     // MARK: - Send Packets
     private func sendGamepad() {
         guard let gp = latestGamepad else { return }
-        udp.send(gp.encode())
+        
+        let data = gp.encode()
+        print("Encoded length: \(data.count)")
+        let envelope = PacketEnvelope(type: PacketType.gamepad.rawValue, sequenceNumber: nextSequenceNumber(), payload: gp.encode())
+        
+        udp.send(envelope.encode())
+        //print("SENT GAMEPAD")
     }
 
     private func sendTimeInit() {
@@ -200,9 +207,9 @@ final class ProtocolEngine: ObservableObject {
     }
     
     private func sendAck(for cmd: CommandPacket, seq: Int16) {
-        let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+        //let nanos = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
         let ack = CommandPacket(
-            timestamp: nanos,
+            timestamp: cmd.timestamp,
             acknowledged: true,
             command: cmd.command,
             data: ""
@@ -220,32 +227,13 @@ final class ProtocolEngine: ObservableObject {
     private func handleCommandPacket(_ cmd: CommandPacket, seq: Int16?) {
         print("[ProtocolEngine] ← Incoming Command: \(cmd.command) data=\(cmd.data) ack=\(cmd.acknowledged)")
         
-        // This may hang a little for large JSON datasets; we shouldn't be parsing higher layer data here anyways.
-        //let jsonData = tryParseJSON(cmd.data)
-        
         onCommand?(cmd)
         
         // Always ACK any incoming command from the RC
         guard !cmd.acknowledged else { return }
         
         sendAck(for: cmd, seq: seq ?? 0)
-        print("[ProtocolEngine] ← Acknowledged Command: seq=\(seq)")
-        
-        /*switch cmd.command {
-        case "CMD_NOTIFY_ROBOT_STATE":
-            hasReceivedRobotState = true
-            if handshakeState != .complete {
-                handshakeState = .complete
-                handshakeTimer?.cancel()
-                handshakeTimer = nil
-                print("[ProtocolEngine] ✅ Handshake complete, RC responded with robot state \(cmd.data)")
-                // Now start the regular timers
-                schedulePackets()
-            }
-
-        default:
-            break
-        }*/
+        print("[ProtocolEngine] ← Acknowledged Command: seq=\(seq ?? -1)")
     }
 
     // MARK: - Inbound handling
@@ -272,6 +260,8 @@ final class ProtocolEngine: ObservableObject {
 
     // MARK: - Gamepad Update Utility
     func updateGamepad(_ builder: (inout GamepadPacket) -> Void) {
+        //print("Got Gamepad Update!")
+        
         var gp = latestGamepad ?? GamepadPacket(
             gamepadID: 2002,
             timestamp: 0,
@@ -280,8 +270,8 @@ final class ProtocolEngine: ObservableObject {
             leftTrigger: 0, rightTrigger: 0,
             buttonFlags: 0,
             user: 1,
-            legacyType: 2,
-            gamepadType: 2,
+            legacyType: 3,
+            gamepadType: 3,
             touch1X: 0, touch1Y: 0,
             touch2X: 0, touch2Y: 0
         )
