@@ -45,10 +45,10 @@ final class ProtocolEngine: ObservableObject {
 
     var latestGamepad: GamepadPacket?
     var currentOpModeState: RobotOpModeState = .unknown
-    var sdkBuildMonth: Int8 = 9
-    var sdkBuildYear: Int16 = 2023
-    var sdkMajor: Int8 = 8
-    var sdkMinor: Int8 = 1
+    var sdkBuildMonth: Int8 = 8
+    var sdkBuildYear: Int16 = 2025
+    var sdkMajor: Int8 = 11
+    var sdkMinor: Int8 = 0
 
     init(config: Config) {
         self.config = config
