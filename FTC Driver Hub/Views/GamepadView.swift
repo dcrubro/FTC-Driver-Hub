@@ -23,6 +23,18 @@ struct GamepadView: View {
     var body: some View {
         GeometryReader { geo in
             content(for: geo)
+                .onReceive(NotificationCenter.default.publisher(for: .joystickReleased)) { _ in
+                    // Send explicit zeroed packet (even if @State not yet updated)
+                    controller.updateGamepad(
+                        leftX: 0,
+                        leftY: 0,
+                        rightX: 0,
+                        rightY: 0,
+                        leftTrigger: 0,
+                        rightTrigger: 0,
+                        buttons: []
+                    )
+                }
         }
     }
 }
@@ -185,11 +197,22 @@ struct JoystickView: View {
                             offset = CGPoint(x: dx, y: dy)
                         }
                         .onEnded { _ in
+                            // Immediately zero and notify parent of change
+                            offset = .zero
+                            
+                            // Explicitly send neutral state right now
+                            NotificationCenter.default.post(name: .joystickReleased, object: nil)
+                            
+                            // Animate back visually
                             withAnimation(.spring()) { offset = .zero }
                         }
                 )
         }
     }
+}
+
+extension Notification.Name {
+    static let joystickReleased = Notification.Name("joystickReleased")
 }
 
 // MARK: - Shape Buttons (△ ○ × □)

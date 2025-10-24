@@ -40,7 +40,7 @@ struct GamepadPacket {
     }
 
     static func read(from data: inout Data) -> GamepadPacket? {
-        guard data.count >= 69 else { return nil }
+        guard data.count >= 60 else { return nil }
         _ = data.readUInt8() // static 5
         
         guard let id = data.readInt32(),
@@ -70,5 +70,30 @@ struct GamepadPacket {
             touch1X: t1x, touch1Y: t1y,
             touch2X: t2x, touch2Y: t2y
         )
+    }
+}
+
+extension GamepadPacket {
+    static func idle() -> GamepadPacket {
+        GamepadPacket(
+            gamepadID: 2002,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
+            leftStickX: 0, leftStickY: 0,
+            rightStickX: 0, rightStickY: 0,
+            leftTrigger: 0, rightTrigger: 0,
+            buttonFlags: 0,
+            user: 1, legacyType: 3, gamepadType: 3,
+            touch1X: 0, touch1Y: 0, touch2X: 0, touch2Y: 0
+        )
+    }
+
+    var isIdle: Bool {
+        return leftStickX == 0 &&
+               leftStickY == 0 &&
+               rightStickX == 0 &&
+               rightStickY == 0 &&
+               leftTrigger == 0 &&
+               rightTrigger == 0 &&
+               buttonFlags == 0
     }
 }

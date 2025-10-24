@@ -109,14 +109,33 @@ final class ProtocolEngine: ObservableObject {
 
     // MARK: - Send Packets
     private func sendGamepad() {
-        guard let gp = latestGamepad else { return }
-        
-        let data = gp.encode()
-        print("Encoded length: \(data.count)")
-        let envelope = PacketEnvelope(type: PacketType.gamepad.rawValue, sequenceNumber: nextSequenceNumber(), payload: gp.encode())
-        
+        // If we don't have a gamepad or it's stale, send idle
+        guard let gp = latestGamepad else {
+            udp.send(PacketEnvelope(
+                type: PacketType.gamepad.rawValue,
+                sequenceNumber: nextSequenceNumber(),
+                payload: GamepadPacket.idle().encode()
+            ).encode())
+            return
+        }
+
+        // Detect if the packet is "all zero" (i.e. idle)
+        if gp.isIdle {
+            udp.send(PacketEnvelope(
+                type: PacketType.gamepad.rawValue,
+                sequenceNumber: nextSequenceNumber(),
+                payload: gp.encode()
+            ).encode())
+            return
+        }
+
+        // Otherwise send the latest input packet
+        let envelope = PacketEnvelope(
+            type: PacketType.gamepad.rawValue,
+            sequenceNumber: nextSequenceNumber(),
+            payload: gp.encode()
+        )
         udp.send(envelope.encode())
-        //print("SENT GAMEPAD")
     }
 
     private func sendTimeInit() {
@@ -264,23 +283,17 @@ final class ProtocolEngine: ObservableObject {
 
     // MARK: - Gamepad Update Utility
     func updateGamepad(_ builder: (inout GamepadPacket) -> Void) {
-        //print("Got Gamepad Update!")
-        
-        var gp = latestGamepad ?? GamepadPacket(
-            gamepadID: 2002,
-            timestamp: 0,
-            leftStickX: 0, leftStickY: 0,
-            rightStickX: 0, rightStickY: 0,
-            leftTrigger: 0, rightTrigger: 0,
-            buttonFlags: 0,
-            user: 1,
-            legacyType: 3,
-            gamepadType: 3,
-            touch1X: 0, touch1Y: 0,
-            touch2X: 0, touch2Y: 0
-        )
-        gp.timestamp = UInt64(Date().timeIntervalSince1970 * 1_000.0)
+        var gp = latestGamepad ?? GamepadPacket.idle()
         builder(&gp)
+
+        // Apply dead-zone correction
+        func dz(_ v: Float) -> Float { abs(v) < 0.05 ? 0 : v }
+        gp.leftStickX = dz(gp.leftStickX)
+        gp.leftStickY = dz(gp.leftStickY)
+        gp.rightStickX = dz(gp.rightStickX)
+        gp.rightStickY = dz(gp.rightStickY)
+
+        gp.timestamp = UInt64(Date().timeIntervalSince1970 * 1_000)
         latestGamepad = gp
     }
 }
