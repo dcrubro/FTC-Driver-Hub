@@ -7,14 +7,7 @@
 
 import SwiftUI
 import Combine
-
-/*struct OpModeData: Codable {
-    let flavor: String
-    let group: String
-    let name: String
-    let source: String?
-    let systemOpModeBaseDisplayName: String?
-}*/
+import GameController
 
 @MainActor
 final class FTCController: ObservableObject {
@@ -29,6 +22,10 @@ final class FTCController: ObservableObject {
     @Published var latestTelemetry: [String: String] = [:]
     @Published var lastErrorMessage: String? = nil
     @Published var showErrorAlert: Bool = false
+    
+    @Published var connectedController: GCController? = nil
+    @Published var controllerName: String = "None"
+    private var controllerObservationSetUp = false
 
     private var engine: ProtocolEngine?
 
@@ -47,8 +44,6 @@ final class FTCController: ObservableObject {
         // MARK: - Telemetry updates
         engine.onTelemetry = { [weak self] packet in
             guard let self else { return }
-            
-            self.logs.append("Got Raw Telemetry!")
 
             for entry in packet.stringEntries {
                 if entry.key == "$Robot$Battery$Level$",
@@ -135,6 +130,8 @@ final class FTCController: ObservableObject {
                 "Build \(hb.sdkBuildMonth)/\(hb.sdkBuildYear)"
             )
         }
+        
+        setupGameControllerObservers()
 
         engine.start()
         self.engine = engine
@@ -228,7 +225,9 @@ final class FTCController: ObservableObject {
         if let jsonData = data.data(using: .utf8) {
             do {
                 let decoded = try JSONDecoder().decode([OpModeData].self, from: jsonData)
-                opModes = decoded
+                if decoded != opModes {
+                    opModes = decoded // Only update if there's a change to prevent unnecessary refreshes
+                }
                 self.logs.append("Received \(opModes.count) OpModes")
             } catch {
                 self.logs.append("Failed to decode OpMode list: \(error.localizedDescription)")
@@ -240,6 +239,88 @@ final class FTCController: ObservableObject {
         if let intValue = Int8(data) {
             self.robotState = RobotOpModeState(rawValue: intValue) ?? .unknown
             self.logs.append("Robot state: \(robotState)")
+        }
+    }
+    
+    // MARK: Game Contoller Setup
+    private func setupGameControllerObservers() {
+        guard !controllerObservationSetUp else { return }
+        controllerObservationSetUp = true
+        
+        // Existing controllers at startup
+        for gc in GCController.controllers() {
+            bindGameController(gc)
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self, let controller = note.object as? GCController else { return }
+            print("Controller connected: \(controller.vendorName ?? "Unknown")")
+            self.bindGameController(controller)
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            print("Controller disconnected")
+            self.connectedController = nil
+            self.controllerName = "None"
+            self.engine?.clearGamepad()
+        }
+    }
+    
+    private func bindGameController(_ controller: GCController) {
+        connectedController = controller
+        controllerName = controller.vendorName ?? "Unknown"
+
+        guard let gamepad = controller.extendedGamepad else {
+            print("⚠️ Controller has no extended profile (likely too simple).")
+            return
+        }
+
+        // When *any* value changes, we rebuild and send the FTC gamepad state.
+        gamepad.valueChangedHandler = { [weak self] gamepad, element in
+            guard let self else { return }
+
+            let lx = Double(gamepad.leftThumbstick.xAxis.value)
+            let ly = Double(-gamepad.leftThumbstick.yAxis.value)
+            let rx = Double(gamepad.rightThumbstick.xAxis.value)
+            let ry = Double(-gamepad.rightThumbstick.yAxis.value)
+            let lt = Double(gamepad.leftTrigger.value)
+            let rt = Double(gamepad.rightTrigger.value)
+
+            var pressed: Set<String> = []
+
+            if gamepad.buttonA.isPressed { pressed.insert("cross") }
+            if gamepad.buttonB.isPressed { pressed.insert("circle") }
+            if gamepad.buttonX.isPressed { pressed.insert("square") }
+            if gamepad.buttonY.isPressed { pressed.insert("triangle") }
+
+            if gamepad.leftShoulder.isPressed { pressed.insert("l1") }
+            if gamepad.rightShoulder.isPressed { pressed.insert("r1") }
+
+            if gamepad.leftThumbstickButton?.isPressed == true { pressed.insert("left_stick_button") }
+            if gamepad.rightThumbstickButton?.isPressed == true { pressed.insert("right_stick_button") }
+
+            if gamepad.dpad.up.isPressed { pressed.insert("dpad_up") }
+            if gamepad.dpad.down.isPressed { pressed.insert("dpad_down") }
+            if gamepad.dpad.left.isPressed { pressed.insert("dpad_left") }
+            if gamepad.dpad.right.isPressed { pressed.insert("dpad_right") }
+
+            self.updateGamepad(
+                leftX: lx, leftY: ly,
+                rightX: rx, rightY: ry,
+                leftTrigger: lt, rightTrigger: rt,
+                buttons: pressed
+            )
+            
+            print("Updated external gamepad!")
         }
     }
     

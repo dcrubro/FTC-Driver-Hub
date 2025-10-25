@@ -296,4 +296,20 @@ final class ProtocolEngine: ObservableObject {
         gp.timestamp = UInt64(Date().timeIntervalSince1970 * 1_000)
         latestGamepad = gp
     }
+    
+    func clearGamepad() {
+        latestGamepad = GamepadPacket(
+            gamepadID: 2002,
+            timestamp: 0,
+            leftStickX: 0, leftStickY: 0,
+            rightStickX: 0, rightStickY: 0,
+            leftTrigger: 0, rightTrigger: 0,
+            buttonFlags: 0,
+            user: 1,
+            legacyType: 3,
+            gamepadType: 3,
+            touch1X: 0, touch1Y: 0,
+            touch2X: 0, touch2Y: 0
+        )
+    }
 }

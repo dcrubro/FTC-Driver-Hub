@@ -35,6 +35,15 @@ struct SettingsView: View {
                             .onSubmit { updateConnectionSettings() }
                     }
                 }
+                
+                Section(header: Text("Controller")) {
+                    HStack {
+                        Text("Bluetooth Gamepad")
+                        Spacer()
+                        Text(controller.controllerName)
+                            .foregroundColor(controller.controllerName == "None" ? .secondary : .green)
+                    }
+                }
 
                 // MARK: - Control Hub Settings
                 Section(header: Text("Control Hub Settings"),
