@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		BCAFBF942E9A7ECE00E402E1 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = BCAFBF932E9A7ECE00E402E1 /* README.md */; };
+		BCB174532EC0281D005D20AD /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = BCB174522EC0281D005D20AD /* LICENSE */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +33,7 @@
 		BC89CB0E2E99C82E00637139 /* FTC Driver HubTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "FTC Driver HubTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC89CB182E99C82E00637139 /* FTC Driver HubUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "FTC Driver HubUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BCAFBF932E9A7ECE00E402E1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		BCB174522EC0281D005D20AD /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -98,6 +100,7 @@
 		BC89CAF82E99C82D00637139 = {
 			isa = PBXGroup;
 			children = (
+				BCB174522EC0281D005D20AD /* LICENSE */,
 				BC6300FF2E9B04AD00116D69 /* Assets */,
 				BCAFBF932E9A7ECE00E402E1 /* README.md */,
 				BC89CB032E99C82E00637139 /* FTC Driver Hub */,
@@ -238,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BCB174532EC0281D005D20AD /* LICENSE in Resources */,
 				BCAFBF942E9A7ECE00E402E1 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
