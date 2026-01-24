@@ -277,7 +277,7 @@ final class ProtocolEngine: ObservableObject {
             print("[ProtocolEngine] ← Time packet: \(time)")
 
         default:
-            print("[ProtocolEngine] ⚠️ Unhandled packet type \(routed.type)")
+            print("[ProtocolEngine] Unhandled packet type \(routed.type)")
         }
     }
 

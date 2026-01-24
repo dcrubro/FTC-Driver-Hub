@@ -61,7 +61,7 @@ struct PacketRouter {
                 }
 
             default:
-                print("[PacketRouter] ⚠️ Unknown packet type: \(env.type)")
+                print("[PacketRouter] Unknown packet type: \(env.type)")
                 return nil
             }
 

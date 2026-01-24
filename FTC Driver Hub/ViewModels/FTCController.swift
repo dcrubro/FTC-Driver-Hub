@@ -280,7 +280,7 @@ final class FTCController: ObservableObject {
         controllerName = controller.vendorName ?? "Unknown"
 
         guard let gamepad = controller.extendedGamepad else {
-            print("⚠️ Controller has no extended profile (likely too simple).")
+            print("Controller has no extended profile (likely too simple).")
             return
         }
 
