@@ -74,9 +74,12 @@ struct GamepadPacket {
 }
 
 extension GamepadPacket {
-    static func idle() -> GamepadPacket {
+    static let gamepad1ID: Int32 = 2001
+    static let gamepad2ID: Int32 = 2002
+
+    static func idle(gamepadID: Int32 = GamepadPacket.gamepad1ID) -> GamepadPacket {
         GamepadPacket(
-            gamepadID: 2002,
+            gamepadID: gamepadID,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
             leftStickX: 0, leftStickY: 0,
             rightStickX: 0, rightStickY: 0,

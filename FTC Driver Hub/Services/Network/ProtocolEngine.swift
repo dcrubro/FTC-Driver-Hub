@@ -42,6 +42,7 @@ final class ProtocolEngine: ObservableObject {
     private var config: Config
     private var sequenceNumber: Int16 = Int16.random(in: 1000...3000)
     private var hasPerformedHandshake = false
+    private var activeGamepadID: Int32 = GamepadPacket.gamepad1ID
 
     var latestGamepad: GamepadPacket?
     var currentOpModeState: RobotOpModeState = .unknown
@@ -114,7 +115,7 @@ final class ProtocolEngine: ObservableObject {
             udp.send(PacketEnvelope(
                 type: PacketType.gamepad.rawValue,
                 sequenceNumber: nextSequenceNumber(),
-                payload: GamepadPacket.idle().encode()
+                payload: GamepadPacket.idle(gamepadID: activeGamepadID).encode()
             ).encode())
             return
         }
@@ -283,8 +284,9 @@ final class ProtocolEngine: ObservableObject {
 
     // MARK: - Gamepad Update Utility
     func updateGamepad(_ builder: (inout GamepadPacket) -> Void) {
-        var gp = latestGamepad ?? GamepadPacket.idle()
+        var gp = latestGamepad ?? GamepadPacket.idle(gamepadID: activeGamepadID)
         builder(&gp)
+        gp.gamepadID = activeGamepadID
 
         // Apply dead-zone correction
         func dz(_ v: Float) -> Float { abs(v) < 0.05 ? 0 : v }
@@ -298,18 +300,13 @@ final class ProtocolEngine: ObservableObject {
     }
     
     func clearGamepad() {
-        latestGamepad = GamepadPacket(
-            gamepadID: 2002,
-            timestamp: 0,
-            leftStickX: 0, leftStickY: 0,
-            rightStickX: 0, rightStickY: 0,
-            leftTrigger: 0, rightTrigger: 0,
-            buttonFlags: 0,
-            user: 1,
-            legacyType: 3,
-            gamepadType: 3,
-            touch1X: 0, touch1Y: 0,
-            touch2X: 0, touch2Y: 0
-        )
+        latestGamepad = GamepadPacket.idle(gamepadID: activeGamepadID)
+    }
+
+    func setActiveGamepad(id: Int32) {
+        activeGamepadID = id
+        if latestGamepad != nil {
+            latestGamepad?.gamepadID = id
+        }
     }
 }

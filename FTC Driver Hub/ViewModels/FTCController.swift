@@ -26,8 +26,14 @@ final class FTCController: ObservableObject {
     @Published var connectedController: GCController? = nil
     @Published var controllerName: String = "None"
     private var controllerObservationSetUp = false
+    private var controllerDiscoveryStarted = false
 
     private var engine: ProtocolEngine?
+
+    enum GamepadInputSource {
+        case touch
+        case external
+    }
 
     func connect() {
         guard !isConnected else { return }
@@ -132,6 +138,7 @@ final class FTCController: ObservableObject {
         }
         
         setupGameControllerObservers()
+        engine.setActiveGamepad(id: GamepadPacket.gamepad1ID)
 
         engine.start()
         self.engine = engine
@@ -189,8 +196,12 @@ final class FTCController: ObservableObject {
                        rightX: Double, rightY: Double,
                        leftTrigger: Double = 0,
                        rightTrigger: Double = 0,
-                       buttons: Set<String> = []) {
+                       buttons: Set<String> = [],
+                       source: GamepadInputSource = .touch) {
         guard let engine else { return }
+        if source == .touch, connectedController != nil {
+            return
+        }
 
         engine.updateGamepad { gp in
             gp.leftStickX = Float(leftX)
@@ -246,6 +257,11 @@ final class FTCController: ObservableObject {
     private func setupGameControllerObservers() {
         guard !controllerObservationSetUp else { return }
         controllerObservationSetUp = true
+
+        if !controllerDiscoveryStarted {
+            controllerDiscoveryStarted = true
+            GCController.startWirelessControllerDiscovery {}
+        }
         
         // Existing controllers at startup
         for gc in GCController.controllers() {
@@ -271,6 +287,7 @@ final class FTCController: ObservableObject {
             print("Controller disconnected")
             self.connectedController = nil
             self.controllerName = "None"
+            self.engine?.setActiveGamepad(id: GamepadPacket.gamepad1ID)
             self.engine?.clearGamepad()
         }
     }
@@ -278,6 +295,8 @@ final class FTCController: ObservableObject {
     private func bindGameController(_ controller: GCController) {
         connectedController = controller
         controllerName = controller.vendorName ?? "Unknown"
+        controller.playerIndex = .index1
+        engine?.setActiveGamepad(id: GamepadPacket.gamepad1ID)
 
         guard let gamepad = controller.extendedGamepad else {
             print("Controller has no extended profile (likely too simple).")
@@ -317,7 +336,8 @@ final class FTCController: ObservableObject {
                 leftX: lx, leftY: ly,
                 rightX: rx, rightY: ry,
                 leftTrigger: lt, rightTrigger: rt,
-                buttons: pressed
+                buttons: pressed,
+                source: .external
             )
             
             print("Updated external gamepad!")
