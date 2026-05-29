@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("ipAddress") private var ipAddress: String = "192.168.43.1"
     @AppStorage("port") private var port: String = "20884"
 
+    @State private var portIsInvalid = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -26,16 +28,26 @@ struct SettingsView: View {
                             .onSubmit { updateConnectionSettings() }
                     }
 
-                    HStack {
-                        Label("Port", systemImage: "number")
-                        Spacer()
-                        TextField("20884", text: $port)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .onSubmit { updateConnectionSettings() }
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack {
+                            Label("Port", systemImage: "number")
+                            Spacer()
+                            TextField("20884", text: $port)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .onSubmit { updateConnectionSettings() }
+                                .onChange(of: port) { _ in
+                                    portIsInvalid = UInt16(port) == nil
+                                }
+                        }
+                        if portIsInvalid {
+                            Text("Invalid port (must be 1–65535)")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
                     }
                 }
-                
+
                 Section(header: Text("Controller")) {
                     HStack {
                         Text("Bluetooth Gamepad")
@@ -60,8 +72,12 @@ struct SettingsView: View {
 
     // MARK: - Update function
     private func updateConnectionSettings() {
-        // Keep your FTCController in sync
         controller.settings.ipAddress = ipAddress
+        guard UInt16(port) != nil else {
+            portIsInvalid = true
+            return
+        }
+        portIsInvalid = false
         controller.settings.port = port
     }
 }

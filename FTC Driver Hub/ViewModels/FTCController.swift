@@ -25,6 +25,7 @@ final class FTCController: ObservableObject {
     
     @Published var connectedController: GCController? = nil
     @Published var controllerName: String = "None"
+    @Published var gamepadSlot: Int = 1
     private var controllerObservationSetUp = false
     private var controllerDiscoveryStarted = false
 
@@ -123,6 +124,13 @@ final class FTCController: ObservableObject {
             }
         }
 
+        // MARK: - Connection timeout
+        engine.onConnectionTimeout = { [weak self] in
+            guard let self else { return }
+            self.logs.append("Connection lost — no packets received for 5 s")
+            self.disconnect()
+        }
+
         // MARK: - Heartbeat handling
         engine.onHeartbeat = { [weak self] (hb: HeartbeatPacket) in
             guard let self else { return }
@@ -152,6 +160,17 @@ final class FTCController: ObservableObject {
             sendCommand("CMD_REQUEST_OP_MODE_LIST")
             print("ProtocolEngine initialized. Sent OpModeList request.")
         }
+    }
+
+    func clearLogs() {
+        logs = []
+    }
+
+    func setGamepadSlot(_ slot: Int) {
+        gamepadSlot = slot
+        let id = slot == 1 ? GamepadPacket.gamepad1ID : GamepadPacket.gamepad2ID
+        engine?.setActiveGamepad(id: id)
+        engine?.clearGamepad()
     }
 
     func disconnect() {

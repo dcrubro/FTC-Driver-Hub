@@ -36,6 +36,10 @@ final class ProtocolEngine: ObservableObject {
     var onTelemetry: ((TelemetryPacket) -> Void)?
     var onCommand: ((CommandPacket) -> Void)?
     var onHeartbeat: ((HeartbeatPacket) -> Void)?
+    var onConnectionTimeout: (() -> Void)?
+
+    private var lastPacketReceived: Date? = nil
+    private var watchdogTimer: DispatchSourceTimer?
 
     private var udp = UDPClient()
     private var timers: [DispatchSourceTimer] = []
@@ -75,13 +79,30 @@ final class ProtocolEngine: ObservableObject {
         //beginHandshake()
         sendTimeInit()
         schedulePackets()
+        startWatchdog()
     }
 
     func stop() {
         timers.forEach { $0.cancel() }
         timers.removeAll()
+        watchdogTimer?.cancel()
+        watchdogTimer = nil
         udp.stop()
         isRunning = false
+    }
+
+    private func startWatchdog() {
+        let t = DispatchSource.makeTimerSource(queue: .global())
+        t.schedule(deadline: .now() + 2.0, repeating: 2.0)
+        t.setEventHandler { [weak self] in
+            guard let self, self.isRunning else { return }
+            guard let last = self.lastPacketReceived else { return }
+            if Date().timeIntervalSince(last) > 5.0 {
+                Task { @MainActor in self.onConnectionTimeout?() }
+            }
+        }
+        t.resume()
+        watchdogTimer = t
     }
 
     // MARK: - Packet Scheduling
@@ -262,6 +283,7 @@ final class ProtocolEngine: ObservableObject {
 
     // MARK: - Inbound handling
     private func handleInbound(_ raw: Data) {
+        lastPacketReceived = Date()
         guard let routed = PacketRouter.decode(raw) else { return }
 
         switch routed.payload {
@@ -272,7 +294,7 @@ final class ProtocolEngine: ObservableObject {
             onTelemetry?(telemetry)
 
         case let hb as HeartbeatPacket:
-            print("[ProtocolEngine] ← Heartbeat packet: \(hb)")
+            onHeartbeat?(hb)
 
         case let time as TimePacket:
             print("[ProtocolEngine] ← Time packet: \(time)")

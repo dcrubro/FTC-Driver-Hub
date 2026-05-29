@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var controller: FTCController
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
@@ -47,6 +47,11 @@ struct DashboardView: View {
                             .frame(width: 90, alignment: .leading)
                         Text(String(format: "%.1f V", controller.telemetry.batteryVoltage))
                             .font(.system(.title3, design: .monospaced))
+                        if controller.telemetry.batteryVoltage > 0 && controller.telemetry.batteryVoltage < 11.5 {
+                            Label("Low Battery", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption).bold()
+                                .foregroundColor(.yellow)
+                        }
                     }
                 }
                 .padding()
@@ -62,8 +67,9 @@ struct DashboardView: View {
                             Text("Select OpMode")
                                 .font(.headline)
                             Spacer()
+                            RobotStateBadge(state: controller.robotState)
                         }
-                        
+
                         Picker("Select OpMode", selection: $controller.selectedOpMode) {
                             ForEach(controller.opModes, id: \.name) { opmode in
                                 Text(opmode.systemOpModeDisplayName ?? opmode.name)
@@ -102,19 +108,41 @@ struct DashboardView: View {
                 Divider()
 
                 // MARK: Logs
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(controller.logs.enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                                .font(.system(.body, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 2)
-                                .padding(.horizontal, 8)
-                                .background(Color(.tertiarySystemBackground))
-                                .cornerRadius(6)
+                HStack {
+                    Text("Logs")
+                        .font(.headline)
+                    Spacer()
+                    Button("Clear") {
+                        controller.clearLogs()
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(controller.logs.enumerated()), id: \.offset) { index, line in
+                                Text(line)
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, 8)
+                                    .background(Color(.tertiarySystemBackground))
+                                    .cornerRadius(6)
+                                    .id("log-\(index)")
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .onChange(of: controller.logs.count) { count in
+                        if count > 0 {
+                            withAnimation {
+                                proxy.scrollTo("log-\(count - 1)", anchor: .bottom)
+                            }
                         }
                     }
-                    .padding(.horizontal)
                 }
 
                 Spacer()
@@ -129,6 +157,42 @@ struct DashboardView: View {
                     Text(controller.lastErrorMessage ?? "Unknown error from Control Hub.")
                 }
             )
+        }
+    }
+}
+
+// MARK: - Robot State Badge
+struct RobotStateBadge: View {
+    var state: RobotOpModeState
+
+    var body: some View {
+        Text(label)
+            .font(.caption).bold()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.2))
+            .foregroundColor(color)
+            .cornerRadius(8)
+    }
+
+    private var label: String {
+        switch state {
+        case .unknown:          return "Unknown"
+        case .notStarted:       return "Not Started"
+        case .initialized:      return "Initialized"
+        case .running:          return "Running"
+        case .stopped:          return "Stopped"
+        case .emergencyStopped: return "E-Stop"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .unknown, .notStarted: return .secondary
+        case .initialized:          return .yellow
+        case .running:              return .green
+        case .stopped:              return .orange
+        case .emergencyStopped:     return .red
         }
     }
 }

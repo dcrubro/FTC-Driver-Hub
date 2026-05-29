@@ -24,14 +24,10 @@ struct GamepadView: View {
         GeometryReader { geo in
             content(for: geo)
                 .onReceive(NotificationCenter.default.publisher(for: .joystickReleased)) { _ in
-                    // Send explicit zeroed packet (even if @State not yet updated)
                     controller.updateGamepad(
-                        leftX: 0,
-                        leftY: 0,
-                        rightX: 0,
-                        rightY: 0,
-                        leftTrigger: 0,
-                        rightTrigger: 0,
+                        leftX: 0, leftY: 0,
+                        rightX: 0, rightY: 0,
+                        leftTrigger: 0, rightTrigger: 0,
                         buttons: []
                     )
                 }
@@ -44,9 +40,17 @@ extension GamepadView {
     // MARK: - Top-Level Layout
     @ViewBuilder
     private func content(for geo: GeometryProxy) -> some View {
+        let isLandscape = geo.size.width > geo.size.height
         ZStack {
             Color.black.ignoresSafeArea()
-            controllerLayout(in: geo)
+            controllerLayout(in: geo, isLandscape: isLandscape)
+
+            // Gamepad slot picker — floats at top center
+            VStack {
+                slotPicker
+                    .padding(.top, 8)
+                Spacer()
+            }
         }
         .onChange(of: leftStick) { _ in sendGamepad() }
         .onChange(of: rightStick) { _ in sendGamepad() }
@@ -55,27 +59,44 @@ extension GamepadView {
         .onChange(of: rightTrigger) { _ in sendGamepad() }
     }
 
+    // MARK: - Slot picker
+    private var slotPicker: some View {
+        Picker("Slot", selection: $controller.gamepadSlot) {
+            Text("Gamepad 1").tag(1)
+            Text("Gamepad 2").tag(2)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 200)
+        .onChange(of: controller.gamepadSlot) { slot in
+            controller.setGamepadSlot(slot)
+        }
+    }
+
     // MARK: - Controller halves container
     @ViewBuilder
-    private func controllerLayout(in geo: GeometryProxy) -> some View {
+    private func controllerLayout(in geo: GeometryProxy, isLandscape: Bool) -> some View {
         let safe = geo.safeAreaInsets
         let safeWidth = geo.size.width - safe.leading - safe.trailing
         let safeHeight = geo.size.height - safe.top - safe.bottom
         let halfWidth = safeWidth / 2
 
         HStack(spacing: safeWidth * 0.05) {
-            leftController(width: halfWidth, height: safeHeight)
-            rightController(width: halfWidth, height: safeHeight)
+            leftController(width: halfWidth, height: safeHeight, isLandscape: isLandscape)
+            rightController(width: halfWidth, height: safeHeight, isLandscape: isLandscape)
         }
         .padding(.horizontal, safeWidth * 0.03)
     }
 
     // MARK: - Left controller layout
     @ViewBuilder
-    private func leftController(width: CGFloat, height: CGFloat) -> some View {
+    private func leftController(width: CGFloat, height: CGFloat, isLandscape: Bool) -> some View {
+        let stickSize = min(min(width, height) * 0.45, 170)
+        let dpadSize = min(min(width, height) * 0.35, 140)
+        let topOffset: CGFloat = isLandscape ? -height * 0.04 : -height * 0.12
+        let bottomOffset: CGFloat = isLandscape ? height * 0.02 : height * 0.05
+
         ZStack {
-            // Joystick + triggers moved up
-            VStack(spacing: max(12, height * 0.035)) {
+            VStack(spacing: max(8, height * 0.035)) {
                 HStack(spacing: 18) {
                     TriggerButton(label: "L1", isPressed: pressedButtons.contains("l1")) {
                         press("l1", true)
@@ -87,28 +108,29 @@ extension GamepadView {
                 }
 
                 JoystickView(offset: $leftStick, color: .blue)
-                    .frame(width: min(width * 0.33, 170),
-                           height: min(width * 0.33, 170))
+                    .frame(width: stickSize, height: stickSize)
             }
-            .offset(y: -height * 0.12) // ⬆️ push higher on screen
+            .offset(y: topOffset)
 
-            // D-pad raised and pushed further left
             VStack {
                 Spacer()
                 DPadView(pressedButtons: $pressedButtons)
-                    .frame(width: min(width * 0.3, 150),
-                           height: min(width * 0.3, 150))
-                    .offset(x: -width * 0.32, y: height * 0.05)
+                    .frame(width: dpadSize, height: dpadSize)
+                    .offset(x: -width * 0.32, y: bottomOffset)
             }
         }
     }
 
     // MARK: - Right controller layout
     @ViewBuilder
-    private func rightController(width: CGFloat, height: CGFloat) -> some View {
+    private func rightController(width: CGFloat, height: CGFloat, isLandscape: Bool) -> some View {
+        let stickSize = min(min(width, height) * 0.45, 170)
+        let buttonSize = min(min(width, height) * 0.35, 140)
+        let topOffset: CGFloat = isLandscape ? -height * 0.04 : -height * 0.12
+        let bottomOffset: CGFloat = isLandscape ? height * 0.02 : height * 0.05
+
         ZStack {
-            // Joystick + triggers moved up
-            VStack(spacing: max(12, height * 0.035)) {
+            VStack(spacing: max(8, height * 0.035)) {
                 HStack(spacing: 18) {
                     TriggerButton(label: "R1", isPressed: pressedButtons.contains("r1")) {
                         press("r1", true)
@@ -120,18 +142,15 @@ extension GamepadView {
                 }
 
                 JoystickView(offset: $rightStick, color: .red)
-                    .frame(width: min(width * 0.33, 170),
-                           height: min(width * 0.33, 170))
+                    .frame(width: stickSize, height: stickSize)
             }
-            .offset(y: -height * 0.12) // ⬆️ push higher
+            .offset(y: topOffset)
 
-            // Shape buttons raised and pushed right
             VStack {
                 Spacer()
                 ShapeButtonsView(pressedButtons: $pressedButtons)
-                    .frame(width: min(width * 0.35, 170),
-                           height: min(width * 0.35, 170))
-                    .offset(x: width * 0.32, y: height * 0.05)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .offset(x: width * 0.32, y: bottomOffset)
             }
         }
     }
@@ -197,13 +216,8 @@ struct JoystickView: View {
                             offset = CGPoint(x: dx, y: dy)
                         }
                         .onEnded { _ in
-                            // Immediately zero and notify parent of change
                             offset = .zero
-                            
-                            // Explicitly send neutral state right now
                             NotificationCenter.default.post(name: .joystickReleased, object: nil)
-                            
-                            // Animate back visually
                             withAnimation(.spring()) { offset = .zero }
                         }
                 )
@@ -237,12 +251,12 @@ struct DPadView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            GamepadButton(label: "▲", id: "dpad_up", color: .gray, pressedButtons: $pressedButtons)
+            GamepadButton(label: "▲", id: "dpad_up", color: .gray, pressedButtons: $pressedButtons, hapticStyle: .rigid)
             HStack(spacing: 10) {
-                GamepadButton(label: "◀︎", id: "dpad_left", color: .gray, pressedButtons: $pressedButtons)
-                GamepadButton(label: "▶︎", id: "dpad_right", color: .gray, pressedButtons: $pressedButtons)
+                GamepadButton(label: "◀︎", id: "dpad_left", color: .gray, pressedButtons: $pressedButtons, hapticStyle: .rigid)
+                GamepadButton(label: "▶︎", id: "dpad_right", color: .gray, pressedButtons: $pressedButtons, hapticStyle: .rigid)
             }
-            GamepadButton(label: "▼", id: "dpad_down", color: .gray, pressedButtons: $pressedButtons)
+            GamepadButton(label: "▼", id: "dpad_down", color: .gray, pressedButtons: $pressedButtons, hapticStyle: .rigid)
         }
     }
 }
@@ -254,6 +268,8 @@ struct TriggerButton: View {
     var onPress: () -> Void
     var onRelease: () -> Void
 
+    @State private var didFire = false
+
     var body: some View {
         RoundedRectangle(cornerRadius: 8)
             .fill(isPressed ? Color.white.opacity(0.3) : Color.white.opacity(0.1))
@@ -262,8 +278,17 @@ struct TriggerButton: View {
             .scaleEffect(isPressed ? 0.95 : 1.0)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in onPress() }
-                    .onEnded { _ in onRelease() }
+                    .onChanged { _ in
+                        if !didFire {
+                            didFire = true
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        onPress()
+                    }
+                    .onEnded { _ in
+                        didFire = false
+                        onRelease()
+                    }
             )
             .animation(.easeOut(duration: 0.1), value: isPressed)
     }
@@ -275,6 +300,9 @@ struct GamepadButton: View {
     var id: String
     var color: Color
     @Binding var pressedButtons: Set<String>
+    var hapticStyle: UIImpactFeedbackGenerator.FeedbackStyle = .light
+
+    @State private var didFire = false
 
     var body: some View {
         let pressed = pressedButtons.contains(id)
@@ -287,8 +315,17 @@ struct GamepadButton: View {
             .shadow(color: pressed ? color.opacity(0.6) : .clear, radius: 6)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in pressedButtons.insert(id) }
-                    .onEnded { _ in pressedButtons.remove(id) }
+                    .onChanged { _ in
+                        if !didFire {
+                            didFire = true
+                            UIImpactFeedbackGenerator(style: hapticStyle).impactOccurred()
+                        }
+                        pressedButtons.insert(id)
+                    }
+                    .onEnded { _ in
+                        didFire = false
+                        pressedButtons.remove(id)
+                    }
             )
             .animation(.easeOut(duration: 0.1), value: pressed)
     }
